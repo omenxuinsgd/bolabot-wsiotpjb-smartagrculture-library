@@ -1,0 +1,282 @@
+<html>
+<head>
+<title>PJB 2022</title>
+<style type="text/css">
+  #messages {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    width:100%;
+    display: inline-block;
+    border:1px solid black;
+    max-height: 250px;
+    min-height: 250px;
+    overflow: scroll;
+  }
+  #messages span {
+      overflow-y: scroll;
+      overflow: scroll;
+  }
+  table {
+          font-family: arial, sans-serif;
+          border-collapse: collapse;
+          width: 20%;
+        }
+
+        td, th {
+          border: 1px solid #dddddd;
+          text-align: left;
+          padding: 8px;
+        }
+
+        tr:nth-child(even) {
+          background-color: #dddddd;
+        }
+</style>
+</head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
+<script src="https://www.gstatic.com/charts/loader.js" type="text/javascript"></script>
+
+<script>
+// MQTT variables
+var MQTTnames = ["bolabot/v1/suhu","bolabot/v1/kelembapan"];
+var MQTTvalues = [0,0,0];
+var tanah = 0;
+
+
+// Define the Google gauge chart
+      google.charts.load('current', {'packages':['gauge']});
+      google.charts.setOnLoadCallback(drawChart);
+
+      function drawChart() {
+
+        var data = google.visualization.arrayToDataTable([
+          ['Label', 'Value'], 
+      ['Suhu(Celcius)', MQTTvalues[0]],
+      ['Kelembapan(%)', MQTTvalues[1]],      
+        ]);
+
+        var options = {
+          width: 800, height: 500,
+          redFrom: 90, redTo: 100,
+          yellowFrom:75, yellowTo: 90,
+          minorTicks: 5
+        };
+
+        var chart = new google.visualization.Gauge(document.getElementById('chart_div'));
+
+        chart.draw(data, options);
+
+        setInterval(function() {
+      for (var i=0; i < MQTTnames.length; i++) {
+      data.setValue(i, 1, MQTTvalues[i]);
+      }
+          chart.draw(data, options);
+
+      }, 1000);
+}
+
+// Create a client instance
+client = new Paho.MQTT.Client("test.mosquitto.org", 8080,"");
+client.onMessageArrived = onMessageArrived;
+
+// connect the client
+client.connect({onSuccess:onConnect});
+
+// called when the client connects
+function onMessageArrived(message) {
+  
+  for (var i=0; i < MQTTnames.length; i++) {
+    if (message.destinationName == MQTTnames[i]) {
+      MQTTvalues[i] = Number(message.payloadString);
+      console.log(message.destinationName +": "+ message.payloadString);
+    }
+  }
+  if(message.destinationName == "bolabot/v1/led"){
+    console.log(message.destinationName +": "+message.payloadString);
+  }
+  if(message.destinationName == "bolabot/v1/tanah"){
+    console.log(message.destinationName +": "+message.payloadString);
+    tanah = Number(message.payloadString);
+  }
+  document.getElementById("messages").innerHTML += '<span>Topic: ' + message.destinationName + '  | ' + message.payloadString + '</span><br/>';
+
+  var table = document.getElementById("tbl");
+  var row = table.insertRow(1);
+  var cell1 = row.insertCell(0);
+  var cell2 = row.insertCell(1);
+  var cell3 = row.insertCell(2);
+  cell1.innerHTML = MQTTvalues[0];
+  cell2.innerHTML = MQTTvalues[1];
+  cell3.innerHTML = tanah;
+}
+function onConnect() {
+  // Once a connection has been made, make a subscription and send a message.
+  for (var i=0; i < MQTTnames.length; i++) {
+  client.subscribe(MQTTnames[i]);
+  client.subscribe('bolabot/v1/led', 1);
+  client.subscribe('bolabot/v1/tanah', 1);
+  }
+}
+// called when a message arrives
+
+function send_mqtt_msg() {
+// Send an MQTT message
+    message = new Paho.MQTT.Message("ON");
+    message.destinationName = "bolabot/v1/led";
+    client.send(message);
+}
+
+function send_mqtt_msg2() {
+// Send an MQTT message
+message = new Paho.MQTT.Message("OFF");
+    message.destinationName = "bolabot/v1/led";
+    client.send(message);
+}
+</script>
+
+<body>
+<h1  style = 'font-size: xx-large; position: relative; left: 245px;'>
+PJB 2022</h1>
+<div id="chart_div"></div>
+<div style="position: relative; top: -60px; left: 273px; margin-bottom: 100px; ">
+    <h1>KONTROL LAMPU</h1>
+    <div style="position: relative; left: 22px;">
+        <button style="background-color: rgb(0, 255, 0); width: 100px; height: 100px;" onclick="send_mqtt_msg()">ON</button>
+        <button style="background-color: rgb(255, 0, 0); width: 100px; height: 100px;"onclick="send_mqtt_msg2()">OFF</button>
+    </div>
+</div>
+<h1>Subsciber MQTT</h1>
+<div id="messages"></div>
+<div id="chartContainer" style="height: 300px; width: 100%;"></div>
+<div>
+  <table id="tbl">
+    <tr>
+      <th>Suhu</th>
+      <th>Kelembapan Udara</th>
+      <th>Kelembapan Tanah</th>
+    </tr>
+  </table>
+</div>
+
+<script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+</body>
+
+<script>
+window.onload = function () {
+
+var dataPoints1 = [];
+var dataPoints2 = [];
+var dataPoints3 = [];
+
+var chart = new CanvasJS.Chart("chartContainer", {
+  zoomEnabled: true,
+  title: {
+    text: "MONITORING SUHU, KELEMBAPAN UDARA DAN TANAH"
+  },
+  axisX: {
+    title: "chart updates every 3 secs"
+  },
+  axisY:{
+    prefix: "$"
+  }, 
+  toolTip: {
+    shared: true
+  },
+  legend: {
+    cursor:"pointer",
+    verticalAlign: "top",
+    fontSize: 22,
+    fontColor: "dimGrey",
+    itemclick : toggleDataSeries
+  },
+  data: [{ 
+    type: "line",
+    xValueType: "dateTime",
+    yValueFormatString: "$####.00",
+    xValueFormatString: "hh:mm:ss TT",
+    showInLegend: true,
+    name: "Suhu",
+    dataPoints: dataPoints1
+    },
+    {       
+      type: "line",
+      xValueType: "dateTime",
+      yValueFormatString: "$####.00",
+      showInLegend: true,
+      name: "Kelembapan Udara" ,
+      dataPoints: dataPoints2
+  },
+  {       
+      type: "line",
+      xValueType: "dateTime",
+      yValueFormatString: "$####.00",
+      showInLegend: true,
+      name: "Kelembapan Tanah" ,
+      dataPoints: dataPoints3
+  }]
+});
+
+function toggleDataSeries(e) {
+  if (typeof(e.dataSeries.visible) === "undefined" || e.dataSeries.visible) {
+    e.dataSeries.visible = false;
+  }
+  else {
+    e.dataSeries.visible = true;
+  }
+  chart.render();
+}
+
+var updateInterval = 3000;
+// initial value
+var yValue1 = 600; 
+var yValue2 = 605;
+
+var time = new Date;
+// starting at 9.30 am
+time.setHours(9);
+time.setMinutes(30);
+time.setSeconds(00);
+time.setMilliseconds(00);
+
+function updateChart(count) {
+  count = count || 1;
+  var deltaY1, deltaY2;
+  for (var i = 0; i < count; i++) {
+    time.setTime(time.getTime()+ updateInterval);
+    deltaY1 = .5 + Math.random() *(-.5-.5);
+    deltaY2 = .5 + Math.random() *(-.5-.5);
+
+  // adding random value and rounding it to two digits. 
+  // yValue1 = Math.round((yValue1 + deltaY1)*100)/100;
+  // yValue2 = Math.round((yValue2 + deltaY2)*100)/100;
+
+  // pushing the new values
+  dataPoints1.push({
+    x: time.getTime(),
+    y: MQTTvalues[0]
+  });
+  dataPoints2.push({
+    x: time.getTime(),
+    y: MQTTvalues[1]
+  });
+  dataPoints3.push({
+    x: time.getTime(),
+    y: tanah
+  });
+  }
+
+  // updating legend text with  updated with y Value 
+  chart.options.data[0].legendText = " Suhu  :" + MQTTvalues[0];
+  chart.options.data[1].legendText = " Kelembapan Udara  :" + MQTTvalues[1];
+  chart.options.data[2].legendText = " Kelembapan Tanah  :" + tanah; 
+  chart.render();
+}
+// generates first set of dataPoints 
+updateChart(100); 
+setInterval(function(){updateChart()}, updateInterval);
+
+}
+</script>
+</html>
